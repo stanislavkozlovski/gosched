@@ -23,7 +23,6 @@ func TestScheduleDetectsCycles(t *testing.T) {
 	err = jobA.scheduleAfterJobStart(30000, []*Job{&jobC})
 	assert.Nil(t, err)
 
-
 	scheduler := NewScheduler(0)
 	scheduler.AddJob(&jobA)
 	scheduler.AddJob(&jobB)
@@ -43,19 +42,19 @@ func TestSchedule(t *testing.T) {
 	// D should start at 0:06:02 (ends at 0:07:02)
 
 	jobA := Job{
-		Name: "A",
+		Name:       "A",
 		DurationMs: 60000,
 	}
 	jobB := Job{
-		Name: "B",
+		Name:       "B",
 		DurationMs: 60000,
 	}
 	jobC := Job{
-		Name: "C",
+		Name:       "C",
 		DurationMs: 90000,
 	}
 	jobD := Job{
-		Name: "D",
+		Name:       "D",
 		DurationMs: 60000,
 	}
 	err := jobA.scheduleAfterJobStart(30000, []*Job{&jobB})
@@ -64,7 +63,7 @@ func TestSchedule(t *testing.T) {
 	assert.Nil(t, err)
 	err = jobC.scheduleAfterJobStart(0, []*Job{&jobA, &jobB})
 	assert.Nil(t, err)
-	err =jobD.scheduleAfterJobEnd(120000, []*Job{&jobC, &jobA})
+	err = jobD.scheduleAfterJobEnd(120000, []*Job{&jobC, &jobA})
 	assert.Nil(t, err)
 
 	baseStartMs := uint64(2000)
@@ -77,17 +76,17 @@ func TestSchedule(t *testing.T) {
 	err = scheduler.Schedule()
 
 	assert.Nil(t, err)
-	assert.Equal(t, jobB.startTimeMs, uint64(120000) + baseStartMs)
-	assert.Equal(t, jobB.endTimeMs, jobB.startTimeMs + 60000)
+	assert.Equal(t, jobB.startTimeMs, uint64(120000)+baseStartMs)
+	assert.Equal(t, jobB.endTimeMs, jobB.startTimeMs+60000)
 
-	assert.Equal(t, jobA.startTimeMs, jobB.startTimeMs + 30000)
-	assert.Equal(t, jobA.endTimeMs, jobA.startTimeMs + jobA.DurationMs)
+	assert.Equal(t, jobA.startTimeMs, jobB.startTimeMs+30000)
+	assert.Equal(t, jobA.endTimeMs, jobA.startTimeMs+jobA.DurationMs)
 
 	assert.Equal(t, jobC.startTimeMs, jobA.startTimeMs)
-	assert.Equal(t, jobC.endTimeMs, jobC.startTimeMs + jobC.DurationMs)
+	assert.Equal(t, jobC.endTimeMs, jobC.startTimeMs+jobC.DurationMs)
 
-	assert.Equal(t, jobD.endTimeMs, jobD.startTimeMs + jobD.DurationMs)
-	assert.Equal(t, jobD.startTimeMs, jobC.endTimeMs + 120000)
+	assert.Equal(t, jobD.endTimeMs, jobD.startTimeMs+jobD.DurationMs)
+	assert.Equal(t, jobD.startTimeMs, jobC.endTimeMs+120000)
 }
 
 func TestJobCannotScheduleBothAfterStartAndEnd(t *testing.T) {

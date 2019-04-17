@@ -3,15 +3,15 @@ package gosched
 import "errors"
 
 type Scheduler struct {
-	jobs []*Job
-	baseStartMs uint64
+	jobs          []*Job
+	baseStartMs   uint64
 	traversedJobs map[string]bool
 }
 
 func NewScheduler(baseStartMs uint64) *Scheduler {
 	return &Scheduler{
-		jobs: []*Job{},
-		baseStartMs: baseStartMs,
+		jobs:          []*Job{},
+		baseStartMs:   baseStartMs,
 		traversedJobs: make(map[string]bool),
 	}
 }
@@ -20,9 +20,9 @@ func (s *Scheduler) AddJob(job *Job) {
 	s.jobs = append(s.jobs, job)
 }
 
-// Schedule() parses all of the jobs, validates/traverses the dependency graph and populates each job's expected startTime and endTime
+// Schedule() parses all of the jobs, validates/traverses the dependency graph (topology sort)
+// 	and populates each job's expected startTime and endTime
 func (s *Scheduler) Schedule() error {
-
 	for _, job := range s.jobs {
 		err := s.traverseJobs(job, make(map[string]bool))
 		if err != nil {
@@ -36,6 +36,7 @@ func (s *Scheduler) traverseJobs(job *Job, traversedJobsThisIteration map[string
 	if s.traversedJobs[job.Name] {
 		return nil
 	}
+
 	s.traversedJobs[job.Name] = true
 	traversedJobsThisIteration[job.Name] = true
 	for _, depJob := range job.dependentJobs() {
@@ -48,24 +49,25 @@ func (s *Scheduler) traverseJobs(job *Job, traversedJobsThisIteration map[string
 			return err
 		}
 	}
+
 	job.schedule(s.baseStartMs)
 	return nil
 }
 
 type ScheduleDelay struct {
-	jobs []*Job
+	jobs    []*Job
 	delayMs uint64
 }
 
 type Job struct {
-	Name string
+	Name       string
 	DurationMs uint64
 
-	startTimeMs uint64
-	scheduled bool
-	endTimeMs uint64
+	startTimeMs        uint64
+	scheduled          bool
+	endTimeMs          uint64
 	scheduleAfterStart *ScheduleDelay
-	scheduleAfterEnd *ScheduleDelay
+	scheduleAfterEnd   *ScheduleDelay
 }
 
 func (j *Job) schedule(baseStartTimeMs uint64) {
