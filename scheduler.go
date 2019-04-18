@@ -1,23 +1,41 @@
 package gosched
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 type Scheduler struct {
-	jobs          []*Job
+	jobs          []*SchedulableJob
+	jobsByName    map[string]*SchedulableJob
 	baseStartMs   uint64
 	traversedJobs map[string]bool
 }
 
 func NewScheduler(baseStartMs uint64) *Scheduler {
 	return &Scheduler{
-		jobs:          []*Job{},
+		jobs:          []*SchedulableJob{},
 		baseStartMs:   baseStartMs,
 		traversedJobs: make(map[string]bool),
+		jobsByName:    make(map[string]*SchedulableJob),
 	}
 }
 
-func (s *Scheduler) AddJob(job *Job) {
+func (s *Scheduler) AddJob(job *SchedulableJob) {
 	s.jobs = append(s.jobs, job)
+	s.jobsByName[job.Name] = job
+}
+
+func (s *Scheduler) JobTimes(jobName string) (startTimeMs uint64, durationMs uint64, endTimeMs uint64, err error) {
+	job := s.jobsByName[jobName]
+	if job == nil {
+		return 0, 0, 0, errors.New(fmt.Sprintf("job %s does not exist in the scheduler", jobName))
+	}
+	if !job.scheduled {
+		return 0, 0, 0, errors.New(fmt.Sprintf("job %s has not been scheduled yet", jobName))
+	}
+
+	return job.startTimeMs, job.DurationMs, job.endTimeMs, nil
 }
 
 // Schedule() parses all of the jobs, validates/traverses the dependency graph (topology sort)
@@ -32,7 +50,7 @@ func (s *Scheduler) Schedule() error {
 	return nil
 }
 
-func (s *Scheduler) traverseJobs(job *Job, traversedJobsThisIteration map[string]bool) error {
+func (s *Scheduler) traverseJobs(job *SchedulableJob, traversedJobsThisIteration map[string]bool) error {
 	if s.traversedJobs[job.Name] {
 		return nil
 	}
@@ -55,11 +73,11 @@ func (s *Scheduler) traverseJobs(job *Job, traversedJobsThisIteration map[string
 }
 
 type ScheduleDelay struct {
-	jobs    []*Job
+	jobs    []*SchedulableJob
 	delayMs uint64
 }
 
-type Job struct {
+type SchedulableJob struct {
 	Name       string
 	DurationMs uint64
 
@@ -70,7 +88,7 @@ type Job struct {
 	scheduleAfterEnd   *ScheduleDelay
 }
 
-func (j *Job) schedule(baseStartTimeMs uint64) {
+func (j *SchedulableJob) schedule(baseStartTimeMs uint64) {
 	if j.scheduleAfterEnd == nil && j.scheduleAfterStart == nil {
 		j.startTimeMs = baseStartTimeMs
 	} else if j.scheduleAfterEnd != nil {
@@ -94,7 +112,7 @@ func (j *Job) schedule(baseStartTimeMs uint64) {
 	j.scheduled = true
 }
 
-func (j *Job) scheduleAfterJobEnd(delayMs uint64, jobs []*Job) error {
+func (j *SchedulableJob) ScheduleAfterJobEnd(delayMs uint64, jobs []*SchedulableJob) error {
 	if j.scheduleAfterStart != nil {
 		return errors.New("cannot schedule this job after other jobs because it is already scheduled before some others")
 	}
@@ -107,7 +125,7 @@ func (j *Job) scheduleAfterJobEnd(delayMs uint64, jobs []*Job) error {
 	return nil
 }
 
-func (j *Job) scheduleAfterJobStart(delayMs uint64, jobs []*Job) error {
+func (j *SchedulableJob) ScheduleAfterJobStart(delayMs uint64, jobs []*SchedulableJob) error {
 	if j.scheduleAfterEnd != nil {
 		return errors.New("cannot schedule this job before other jobs because it is already scheduled after some others")
 	}
@@ -120,9 +138,9 @@ func (j *Job) scheduleAfterJobStart(delayMs uint64, jobs []*Job) error {
 	return nil
 }
 
-func (j *Job) dependentJobs() []*Job {
+func (j *SchedulableJob) dependentJobs() []*SchedulableJob {
 	if j.scheduleAfterEnd == nil && j.scheduleAfterStart == nil {
-		return []*Job{}
+		return []*SchedulableJob{}
 	} else if j.scheduleAfterEnd == nil {
 		return j.scheduleAfterStart.jobs
 	}

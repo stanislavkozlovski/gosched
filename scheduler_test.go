@@ -7,20 +7,20 @@ import (
 
 func TestScheduleDetectsCycles(t *testing.T) {
 	// C->B->A->C - a cyclic graph
-	jobA := Job{
+	jobA := SchedulableJob{
 		Name: "A",
 	}
-	jobB := Job{
+	jobB := SchedulableJob{
 		Name: "B",
 	}
-	jobC := Job{
+	jobC := SchedulableJob{
 		Name: "C",
 	}
-	err := jobC.scheduleAfterJobStart(30000, []*Job{&jobB})
+	err := jobC.ScheduleAfterJobStart(30000, []*SchedulableJob{&jobB})
 	assert.Nil(t, err)
-	err = jobB.scheduleAfterJobStart(30000, []*Job{&jobA})
+	err = jobB.ScheduleAfterJobStart(30000, []*SchedulableJob{&jobA})
 	assert.Nil(t, err)
-	err = jobA.scheduleAfterJobStart(30000, []*Job{&jobC})
+	err = jobA.ScheduleAfterJobStart(30000, []*SchedulableJob{&jobC})
 	assert.Nil(t, err)
 
 	scheduler := NewScheduler(0)
@@ -41,29 +41,29 @@ func TestSchedule(t *testing.T) {
 	// C should start at 0:02:32 (ends at 0:04:02)
 	// D should start at 0:06:02 (ends at 0:07:02)
 
-	jobA := Job{
+	jobA := SchedulableJob{
 		Name:       "A",
 		DurationMs: 60000,
 	}
-	jobB := Job{
+	jobB := SchedulableJob{
 		Name:       "B",
 		DurationMs: 60000,
 	}
-	jobC := Job{
+	jobC := SchedulableJob{
 		Name:       "C",
 		DurationMs: 90000,
 	}
-	jobD := Job{
+	jobD := SchedulableJob{
 		Name:       "D",
 		DurationMs: 60000,
 	}
-	err := jobA.scheduleAfterJobStart(30000, []*Job{&jobB})
+	err := jobA.ScheduleAfterJobStart(30000, []*SchedulableJob{&jobB})
 	assert.Nil(t, err)
-	err = jobB.scheduleAfterJobStart(120000, nil)
+	err = jobB.ScheduleAfterJobStart(120000, nil)
 	assert.Nil(t, err)
-	err = jobC.scheduleAfterJobStart(0, []*Job{&jobA, &jobB})
+	err = jobC.ScheduleAfterJobStart(0, []*SchedulableJob{&jobA, &jobB})
 	assert.Nil(t, err)
-	err = jobD.scheduleAfterJobEnd(120000, []*Job{&jobC, &jobA})
+	err = jobD.ScheduleAfterJobEnd(120000, []*SchedulableJob{&jobC, &jobA})
 	assert.Nil(t, err)
 
 	baseStartMs := uint64(2000)
@@ -78,37 +78,70 @@ func TestSchedule(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, jobB.startTimeMs, uint64(120000)+baseStartMs)
 	assert.Equal(t, jobB.endTimeMs, jobB.startTimeMs+60000)
+	start, dur, end, err := scheduler.JobTimes(jobB.Name)
+	assert.Nil(t, err)
+	assert.Equal(t, jobB.startTimeMs, start)
+	assert.Equal(t, jobB.DurationMs, dur)
+	assert.Equal(t, jobB.endTimeMs, end)
 
 	assert.Equal(t, jobA.startTimeMs, jobB.startTimeMs+30000)
 	assert.Equal(t, jobA.endTimeMs, jobA.startTimeMs+jobA.DurationMs)
+	start, dur, end, err = scheduler.JobTimes(jobA.Name)
+	assert.Nil(t, err)
+	assert.Equal(t, jobA.startTimeMs, start)
+	assert.Equal(t, jobA.DurationMs, dur)
+	assert.Equal(t, jobA.endTimeMs, end)
 
 	assert.Equal(t, jobC.startTimeMs, jobA.startTimeMs)
 	assert.Equal(t, jobC.endTimeMs, jobC.startTimeMs+jobC.DurationMs)
+	start, dur, end, err = scheduler.JobTimes(jobC.Name)
+	assert.Nil(t, err)
+	assert.Equal(t, jobC.startTimeMs, start)
+	assert.Equal(t, jobC.DurationMs, dur)
+	assert.Equal(t, jobC.endTimeMs, end)
 
 	assert.Equal(t, jobD.endTimeMs, jobD.startTimeMs+jobD.DurationMs)
 	assert.Equal(t, jobD.startTimeMs, jobC.endTimeMs+120000)
+	start, dur, end, err = scheduler.JobTimes(jobD.Name)
+	assert.Nil(t, err)
+	assert.Equal(t, jobD.startTimeMs, start)
+	assert.Equal(t, jobD.DurationMs, dur)
+	assert.Equal(t, jobD.endTimeMs, end)
+}
+
+func TestJobTimesThrowsErrors(t *testing.T) {
+	jobA := SchedulableJob{Name: "A"}
+	scheduler := NewScheduler(0)
+	_, _, _, err := scheduler.JobTimes("A") // not added
+	assert.NotNil(t, err)
+	scheduler.AddJob(&jobA)
+	_, _, _, err = scheduler.JobTimes("A") // not scheduled
+	assert.NotNil(t, err)
+	jobA.scheduled = true
+	_, _, _, err = scheduler.JobTimes("A")
+	assert.Nil(t, err)
 }
 
 func TestJobCannotScheduleBothAfterStartAndEnd(t *testing.T) {
-	jobA := Job{Name: "A"}
-	jobB := Job{Name: "B"}
-	jobC := Job{Name: "C"}
+	jobA := SchedulableJob{Name: "A"}
+	jobB := SchedulableJob{Name: "B"}
+	jobC := SchedulableJob{Name: "C"}
 
-	err := jobA.scheduleAfterJobStart(0, []*Job{&jobB})
+	err := jobA.ScheduleAfterJobStart(0, []*SchedulableJob{&jobB})
 	assert.Nil(t, err)
 	assert.NotNil(t, jobA.scheduleAfterStart)
-	err = jobA.scheduleAfterJobEnd(0, []*Job{&jobC})
+	err = jobA.ScheduleAfterJobEnd(0, []*SchedulableJob{&jobC})
 	assert.NotNil(t, err)
 	assert.Nil(t, jobA.scheduleAfterEnd)
 }
 
 func TestJobCannotScheduleBothAfterItself(t *testing.T) {
-	jobA := Job{Name: "A"}
+	jobA := SchedulableJob{Name: "A"}
 
-	err := jobA.scheduleAfterJobStart(0, []*Job{&jobA})
+	err := jobA.ScheduleAfterJobStart(0, []*SchedulableJob{&jobA})
 	assert.NotNil(t, err)
 	assert.Nil(t, jobA.scheduleAfterStart)
-	err = jobA.scheduleAfterJobEnd(0, []*Job{&jobA})
+	err = jobA.ScheduleAfterJobEnd(0, []*SchedulableJob{&jobA})
 	assert.NotNil(t, err)
 	assert.Nil(t, jobA.scheduleAfterEnd)
 }
