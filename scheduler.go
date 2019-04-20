@@ -72,48 +72,44 @@ func (s *Scheduler) traverseJobs(job *SchedulableJob, traversedJobsThisIteration
 	return nil
 }
 
-type ScheduleDelay struct {
-	jobs    []*SchedulableJob
-	delayMs uint64
-}
-
 type SchedulableJob struct {
 	Name       string
 	DurationMs uint64
+	DelayMs    uint64
 
 	startTimeMs        uint64
 	scheduled          bool
 	endTimeMs          uint64
-	scheduleAfterStart *ScheduleDelay
-	scheduleAfterEnd   *ScheduleDelay
+	scheduleAfterStart []*SchedulableJob
+	scheduleAfterEnd   []*SchedulableJob
 }
 
 func (j *SchedulableJob) schedule(baseStartTimeMs uint64) {
-	if j.scheduleAfterEnd == nil && j.scheduleAfterStart == nil {
-		j.startTimeMs = baseStartTimeMs
-	} else if j.scheduleAfterEnd != nil {
+	if len(j.scheduleAfterEnd) == 0 && len(j.scheduleAfterStart) == 0 {
+		j.startTimeMs = baseStartTimeMs + j.DelayMs
+	} else if len(j.scheduleAfterEnd) != 0 {
 		latestEndTime := baseStartTimeMs
-		for _, job := range j.scheduleAfterEnd.jobs {
+		for _, job := range j.scheduleAfterEnd {
 			if job.endTimeMs > latestEndTime {
 				latestEndTime = job.endTimeMs
 			}
 		}
-		j.startTimeMs = latestEndTime + j.scheduleAfterEnd.delayMs
+		j.startTimeMs = latestEndTime + j.DelayMs
 	} else {
 		latestStartTime := baseStartTimeMs
-		for _, job := range j.scheduleAfterStart.jobs {
+		for _, job := range j.scheduleAfterStart {
 			if job.startTimeMs > latestStartTime {
 				latestStartTime = job.startTimeMs
 			}
 		}
-		j.startTimeMs = latestStartTime + j.scheduleAfterStart.delayMs
+		j.startTimeMs = latestStartTime + j.DelayMs
 	}
 	j.endTimeMs = j.startTimeMs + j.DurationMs
 	j.scheduled = true
 }
 
-func (j *SchedulableJob) ScheduleAfterJobEnd(delayMs uint64, jobs []*SchedulableJob) error {
-	if j.scheduleAfterStart != nil {
+func (j *SchedulableJob) ScheduleAfterJobEnd(jobs []*SchedulableJob) error {
+	if len(j.scheduleAfterStart) != 0 {
 		return errors.New("cannot schedule this job after other jobs because it is already scheduled before some others")
 	}
 	for _, schedJob := range jobs {
@@ -121,12 +117,12 @@ func (j *SchedulableJob) ScheduleAfterJobEnd(delayMs uint64, jobs []*Schedulable
 			return errors.New("cannot schedule job after itself")
 		}
 	}
-	j.scheduleAfterEnd = &ScheduleDelay{jobs, delayMs}
+	j.scheduleAfterEnd = jobs
 	return nil
 }
 
-func (j *SchedulableJob) ScheduleAfterJobStart(delayMs uint64, jobs []*SchedulableJob) error {
-	if j.scheduleAfterEnd != nil {
+func (j *SchedulableJob) ScheduleAfterJobStart(jobs []*SchedulableJob) error {
+	if len(j.scheduleAfterEnd) != 0 {
 		return errors.New("cannot schedule this job before other jobs because it is already scheduled after some others")
 	}
 	for _, schedJob := range jobs {
@@ -134,15 +130,15 @@ func (j *SchedulableJob) ScheduleAfterJobStart(delayMs uint64, jobs []*Schedulab
 			return errors.New("cannot schedule job after itself")
 		}
 	}
-	j.scheduleAfterStart = &ScheduleDelay{jobs, delayMs}
+	j.scheduleAfterStart = jobs
 	return nil
 }
 
 func (j *SchedulableJob) dependentJobs() []*SchedulableJob {
-	if j.scheduleAfterEnd == nil && j.scheduleAfterStart == nil {
+	if len(j.scheduleAfterEnd) == 0 && len(j.scheduleAfterStart) == 0 {
 		return []*SchedulableJob{}
-	} else if j.scheduleAfterEnd == nil {
-		return j.scheduleAfterStart.jobs
+	} else if len(j.scheduleAfterEnd) == 0 {
+		return j.scheduleAfterStart
 	}
-	return j.scheduleAfterEnd.jobs
+	return j.scheduleAfterEnd
 }
