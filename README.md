@@ -5,3 +5,4 @@ Essentially, you have multiple jobs with defined durations. You have some jobs d
 * Job B should start X minutes after job A **ended**
 
 See the tests for concrete examples
+GT
